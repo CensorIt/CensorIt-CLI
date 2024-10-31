@@ -1,7 +1,11 @@
 import { ethers } from "ethers";
+import { Provider } from "ethers";
 import * as dotenv from "dotenv";
+import { estimateGas } from "viem/actions";
 const fs = require('fs');
 const path = require('path');
+const chalk = require('chalk');
+const readlineSync = require('readline-sync');
 dotenv.config();
 
 // Check if the process.env object is empty
@@ -20,10 +24,10 @@ let chainId = 31337;
 // const coreDeploymentData = JSON.parse(fs.readFileSync(path.resolve(__dirname, `../contracts/deployments/core/${chainId}.json`), 'utf8'));
 
 
-const delegationManagerAddress ="0xA44151489861Fe9e3055d95adC98FbD462B948e7"; // todo: reminder to fix the naming of this contract in the deployment file, change to delegationManager
+const delegationManagerAddress = "0xA44151489861Fe9e3055d95adC98FbD462B948e7"; // todo: reminder to fix the naming of this contract in the deployment file, change to delegationManager
 const avsDirectoryAddress = "0x055733000064333CaDDbC92763c58BF0192fFeBf";
-const CensorItServiceMangerAddress = "0xbA4aF80Feb652139be806C2c66C04D55017230F5";
-const ecdsaStakeRegistryAddress = "0xaEFaC11F85fDb2f171F32bC34fEC18f7b8a69CE1";
+const CensorItServiceMangerAddress = "0x792a456E832863381e1e3cDFEb0FA8e3085B990E";
+const ecdsaStakeRegistryAddress = "0x3075398a9b44B9004bB6346d49DE351A87973753";
 
 
 
@@ -40,45 +44,74 @@ const ecdsaRegistryContract = new ethers.Contract(ecdsaStakeRegistryAddress, ecd
 const avsDirectory = new ethers.Contract(avsDirectoryAddress, avsDirectoryABI, wallet);
 
 
-const signAndRespondToTask = async (taskIndex: number, taskCreatedBlock: number, taskName: string) => {
-    const message = `Hello, ${taskName}`;
-    const messageHash = ethers.solidityPackedKeccak256(["string"], [message]);
+const signAndRespondToTask = async (contentId: number, content: any) => {
+    const violationtype = [
+        "VULGAR",
+        "FAKE",
+        "HARMFUL",
+        "COPYRIGHT"
+    ]
+
+    const contentType = [
+        "AUDIO",
+        "VIDEO",
+        "TEXT",
+        "IMAGE"
+    ]
+    const operatorAddress = await wallet.getAddress();
+    const contentReport = await censorItServiceManager.getReport(contentId);
+    
+    console.log(chalk.green("Got the content report...\n"));
+    console.log(chalk.green("ContentId: "), chalk.yellow(contentId));
+    console.log(chalk.green("Content: "), chalk.yellow(contentReport.content));
+    console.log(chalk.green("ContentType: "), chalk.yellow(contentType[contentReport.contentType]));
+    console.log(chalk.green("ViolationType: "), chalk.yellow(violationtype[contentReport.voilationType]),"\n");
+    
+    const vote = Boolean(readlineSync.question(chalk.yellow("Enter the vote(true/false): ")));
+    console.log("\n");
+    // Create the message hash
+    const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "bool", "address"],
+        [contentId, vote, operatorAddress]
+    );
+
+    // Sign the message
     const messageBytes = ethers.getBytes(messageHash);
     const signature = await wallet.signMessage(messageBytes);
 
-    console.log(`Signing and responding to task ${taskIndex}`);
+    // Send transaction with proper parameters
+    try {
 
-    const operators = [await wallet.getAddress()];
-    const signatures = [signature];
-    const signedTask = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["address[]", "bytes[]", "uint32"],
-        [operators, signatures, ethers.toBigInt(await provider.getBlockNumber()-1)]
-    );
+        const tx = await censorItServiceManager.respondToTask(
+            contentId,
+            vote,
+            signature,
+            {
+                gasLimit: 300000
+            }
+        );
+        await tx.wait();
+        console.log(chalk.green(`Responded to task with content id : ${contentId}\n`));
+        console.log(chalk.yellow("Monitoring for new tasks...\n"));
 
-    const tx = await censorItServiceManager.respondToTask(
-        { name: taskName, taskCreatedBlock: taskCreatedBlock },
-        taskIndex,
-        signedTask
-    );
-    await tx.wait();
-    console.log(`Responded to task.`);
+    } catch (e) {
+        console.log(chalk.red("Error occured ", e));
+    }
 };
 
+
 const registerOperator = async () => {
-    
+
     // Registers as an Operator in EigenLayer.
-    try {
-        const tx1 = await delegationManager.registerAsOperator({
-            __deprecated_earningsReceiver: await wallet.address,
-            delegationApprover: "0x0000000000000000000000000000000000000000",
-            stakerOptOutWindowBlocks: 0
-        }, "");
-        await tx1.wait();
-        console.log("Operator registered to Core EigenLayer contracts");
-    } catch (error) {
-        console.error("Error in registering as operator:", error);
-    }
-    
+
+    const tx1 = await delegationManager.registerAsOperator({
+        __deprecated_earningsReceiver: await wallet.address,
+        delegationApprover: "0x0000000000000000000000000000000000000000",
+        stakerOptOutWindowBlocks: 0
+    }, "");
+    await tx1.wait();
+    console.log(chalk.green("Operator registered to Core EigenLayer contracts\n"));
+
     const salt = ethers.hexlify(ethers.randomBytes(32));
     const expiry = Math.floor(Date.now() / 1000) + 3600; // Example expiry, 1 hour from now
 
@@ -91,24 +124,24 @@ const registerOperator = async () => {
 
     // Calculate the digest hash, which is a unique value representing the operator, avs, unique value (salt) and expiration date.
     const operatorDigestHash = await avsDirectory.calculateOperatorAVSRegistrationDigestHash(
-        wallet.address, 
-        await censorItServiceManager.getAddress(), 
-        salt, 
+        wallet.address,
+        await censorItServiceManager.getAddress(),
+        salt,
         expiry
     );
-    console.log(operatorDigestHash);
-    
+    // console.log(operatorDigestHash);
+
     // Sign the digest hash with the operator's private key
-    console.log("Signing digest hash with operator's private key");
+    console.log(chalk.green("Signing digest hash with operator's private key...\n"));
     const operatorSigningKey = new ethers.SigningKey(process.env.PRIVATE_KEY!);
     const operatorSignedDigestHash = operatorSigningKey.sign(operatorDigestHash);
 
     // Encode the signature in the required format
     operatorSignatureWithSaltAndExpiry.signature = ethers.Signature.from(operatorSignedDigestHash).serialized;
 
-    console.log("Registering Operator to AVS Registry contract");
+    console.log(chalk.green("Registering Operator to AVS Registry contract\n"));
 
-    
+
     // Register Operator to AVS
     // Per release here: https://github.com/Layr-Labs/eigenlayer-middleware/blob/v0.2.1-mainnet-rewards/src/unaudited/ECDSAStakeRegistry.sol#L49
     const tx2 = await ecdsaRegistryContract.registerOperatorWithSignature(
@@ -116,27 +149,47 @@ const registerOperator = async () => {
         wallet.address
     );
     await tx2.wait();
-    console.log("Operator registered on AVS successfully");
+    console.log(chalk.green("Operator registered on AVS successfully!!\n"));
 };
+// Helper function to verify if operator is registered
+const checkOperatorStatus = async (operatorAddress: string) => {
+    try {
+        const isRegistered = await ecdsaRegistryContract.operatorRegistered(operatorAddress);
+        console.log(chalk.green("Operator registration status:"), chalk.yellow(isRegistered, "\n"));
+        return isRegistered;
+    } catch (error) {
+        console.error("Error checking operator status:", error);
+        throw error;
+    }
+};
+// Modify the monitoring function to check operator status
 const monitorNewTasks = async () => {
-    //console.log(`Creating new task "EigenWorld"`);
-    //await censorItServiceManager.createNewTask("EigenWorld");
+    const operatorAddress = await wallet.getAddress();
+    const isRegistered = await checkOperatorStatus(operatorAddress);
+
+    if (!isRegistered) {
+        throw new Error("Operator is not registered. Please register first.");
+    }
 
     censorItServiceManager.on("newReportCreated", async (taskIndex: number, task: any) => {
-        console.log(`New task detected: Hello, ${task.content}`);
-        // await signAndRespondToTask(taskIndex, task.taskCreatedBlock, task.name);
+        console.log(chalk.yellow(`New task detected with id :${taskIndex}`));
+        await signAndRespondToTask(taskIndex, task);
     });
 
-    console.log("Monitoring for new tasks...");
+    console.log(chalk.yellow("Monitoring for new tasks...\n"));
 };
 
-const main = async () => {
-    // await registerOperator();
-    await monitorNewTasks().catch((error) => {
-        console.error("Error monitoring tasks:", error);
-    });
+export const operatorTasks = async () => {
+    try {
+        await registerOperator();
+    } catch {
+
+        await monitorNewTasks().catch((error) => {
+            console.error("Error monitoring tasks:", error);
+        });
+    }
 };
 
-main().catch((error) => {
+operatorTasks().catch((error) => {
     console.error("Error in main function:", error);
 });

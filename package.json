@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "listen": "npx ts-node scripts/index.ts",
+    "create": "npx ts-node scripts/createNewTask.ts",
+    "cli":"npx ts-node scripts/cli.ts"
   },
   "author": "",
   "license": "ISC",
@@ -11,6 +13,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
+    "figlet": "^1.8.0",
     "readline-sync": "^1.4.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
