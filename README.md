@@ -2,7 +2,7 @@
 
 ## Overview
 
-![youtube](https://www.youtube.com/watch?v=JOLcf0E1xu0)  
+[youtube](https://www.youtube.com/watch?v=JOLcf0E1xu0)  
 
 CensorIt CLI is a command-line interface designed to streamline the reporting and verification of AVS contracts for CensorIt. This tool allows users to easily report content violations through IPFS URLs, enabling operators to verify and act on reported content efficiently.
 
@@ -18,17 +18,17 @@ To install CensorIt CLI, follow these steps:
 1. Clone the repository:
 
 ```bash
-   git clone https://github.com/CensorIt/CensorIt-CLI
+git clone https://github.com/CensorIt/CensorIt-CLI
 ```
 
 2.Navigate to the project directory:
 ```bash
-    cd Censorit-CLI
+cd Censorit-CLI
 ```
 
 3. Create a .env file from env.example and add your private key:
 ```bash
-    cp env.example .env
+cp env.example .env
 ```
 
 4. Install the dependencies:
