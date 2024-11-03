@@ -2,14 +2,14 @@
 
 ## Overview
 
-[youtube](https://www.youtube.com/watch?v=JOLcf0E1xu0)  
+[![CensorIt CLI Overview](https://img.youtube.com/vi/JOLcf0E1xu0/0.jpg)](https://www.youtube.com/watch?v=JOLcf0E1xu0)  
 
 CensorIt CLI is a command-line interface designed to streamline the reporting and verification of AVS contracts for CensorIt. This tool allows users to easily report content violations through IPFS URLs, enabling operators to verify and act on reported content efficiently.
 
 ## Features
 
 - **Create New Task**: Report content violations by submitting the IPFS URL, content type, and violation type.
-- **Register and Verify as Reporter**: Reporters can register and submit content for review.
+- **Register and Verify as Reporter**: Operators can register and verify the violation of the content.
 
 ## Installation
 
